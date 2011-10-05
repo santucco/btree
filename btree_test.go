@@ -282,15 +282,12 @@ func BenchmarkFailedFind(b *testing.B) {
 	b.StopTimer()
 	b.N = count
 	for i := 0; i < count; i++ {
-		r := rand.Int31()
-		if _, found := testMap[r]; found {
-			continue
-		}
 		b.StartTimer()
-		if _, err := bt.Find(key{r, 0}); err != nil {
+		_, err := bt.Find(key{benchList[i]+1, 0})
+		b.StopTimer()
+		if err != nil {
 			panic(err)
 		}
-		b.StopTimer()
 	}
 }
 
