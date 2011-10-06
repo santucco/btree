@@ -328,16 +328,22 @@ func (this *BTree) find(key Key) (*node, int, Key, os.Error) {
 func (this *BTree) insert(key Key) (Key, os.Error) {
 	offset := this.header.Root
 	offsets := make([]int64, 0, 10)
+	c := 0
+	var p node
+	p.init(this)
+	var less int = -1
 	for true {
-		var p node
-		p.init(this)
-		var less int = -1
 		var k Key
 		if offset != -1 {
 			if err := p.read(this.reader, offset); err != nil {
 				return nil, err
 			}
 			_, k, less = p.find(key)
+		}
+		if p.count == this.header.Capacity {
+			c++
+		} else {
+			c = 0
 		}
 		if k != nil {
 			return k, nil
@@ -354,23 +360,37 @@ func (this *BTree) insert(key Key) (Key, os.Error) {
 				continue
 			}
 		}
-		p.insert(less, key, -1)
-		full := p.count > this.header.Capacity
-		if !full {
-			if err := this.writeNode(&p); err != nil {
+		break
+	}
+	// if current and previous nodes are full, trying to reserve a space in the storage
+	// and put nodes in the list of empty nodes
+	if c > len(this.empty) {
+		c -= len(this.empty)
+		var e node
+		e.init(this)
+		for i := 0; i < c; i++ {
+			e.offset = -1
+			if err := this.writeNode(&e); err != nil {
 				return nil, err
 			}
+			this.empty = append(this.empty, e.offset)
 		}
-		if this.header.Root == -1 {
-			this.header.Root = p.offset
-			return nil, this.header.write(this.writer, this.empty)
-		}
-		if !full {
-			return nil, nil
-		}
-		return nil, this.split(&p, offsets)
 	}
-	return nil, nil
+	p.insert(less, key, -1)
+	full := p.count > this.header.Capacity
+	if !full {
+		if err := this.writeNode(&p); err != nil {
+			return nil, err
+		}
+	}
+	if this.header.Root == -1 {
+		this.header.Root = p.offset
+		return nil, this.header.write(this.writer, this.empty)
+	}
+	if !full {
+		return nil, nil
+	}
+	return nil, this.split(&p, offsets)
 }
 
 // split splits a node pointed by p on two nodes, inserts a middle data in a parent node and saves all changed nodes.
@@ -391,7 +411,7 @@ func (this *BTree) split(p *node, offsets []int64) os.Error {
 		offset := np.offset
 		key := p.getKey(int(np.count))
 		p.count /= 2
-		if err := this.writeNode(p); err != nil{
+		if err := this.writeNode(p); err != nil {
 			return err
 		}
 		if len(offsets) == 0 {
@@ -411,7 +431,7 @@ func (this *BTree) split(p *node, offsets []int64) os.Error {
 			p.insert(less, key, offset)
 		}
 		if p.count <= this.header.Capacity {
-			if err := this.writeNode(p); err != nil{
+			if err := this.writeNode(p); err != nil {
 				return err
 			}
 			break
