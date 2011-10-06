@@ -327,7 +327,6 @@ func (this *BTree) find(key Key) (*node, int, Key, os.Error) {
 // It returns the key if it is already exists or nil if the key is inserted and an error, if any.
 func (this *BTree) insert(key Key) (Key, os.Error) {
 	offset := this.header.Root
-	nodes := make(map[int64]*node, 10)
 	offsets := make([]int64, 0, 10)
 	for true {
 		var p node
@@ -338,7 +337,6 @@ func (this *BTree) insert(key Key) (Key, os.Error) {
 			if err := p.read(this.reader, offset); err != nil {
 				return nil, err
 			}
-			nodes[p.offset] = &p, true
 			_, k, less = p.find(key)
 		}
 		if k != nil {
@@ -370,15 +368,14 @@ func (this *BTree) insert(key Key) (Key, os.Error) {
 		if !full {
 			return nil, nil
 		}
-		nodes[p.offset] = &p, true
-		return nil, this.split(&p, nodes, offsets)
+		return nil, this.split(&p, offsets)
 	}
 	return nil, nil
 }
 
 // split splits a node pointed by p on two nodes, inserts a middle data in a parent node and saves all changed nodes.
 // It returns nil on success or an error.
-func (this *BTree) split(p *node, nodes map[int64]*node, offsets []int64) os.Error {
+func (this *BTree) split(p *node, offsets []int64) os.Error {
 	var root int64 = -1
 	for true {
 		var np node
@@ -394,6 +391,9 @@ func (this *BTree) split(p *node, nodes map[int64]*node, offsets []int64) os.Err
 		offset := np.offset
 		key := p.getKey(int(np.count))
 		p.count /= 2
+		if err := this.writeNode(p); err != nil{
+			return err
+		}
 		if len(offsets) == 0 {
 			var rp node
 			rp.init(this)
@@ -406,16 +406,16 @@ func (this *BTree) split(p *node, nodes map[int64]*node, offsets []int64) os.Err
 		} else {
 			off := offsets[len(offsets)-1]
 			offsets = offsets[:len(offsets)-1]
-			p, _ = nodes[off]
+			p.read(this.reader, off)
 			_, _, less := p.find(key)
 			p.insert(less, key, offset)
 		}
 		if p.count <= this.header.Capacity {
+			if err := this.writeNode(p); err != nil{
+				return err
+			}
 			break
 		}
-	}
-	for _, v := range nodes {
-		this.writeNode(v)
 	}
 	if root == -1 {
 		return nil
