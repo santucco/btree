@@ -35,7 +35,7 @@ var testMap map[int32]*int32
 
 func Test10(t *testing.T) {
 	capacity = 10
-	count = 1000
+	count = 1000 
 	delta = 1
 	testMap = make(map[int32]*int32, count)
 	testCreate(t)
@@ -69,7 +69,7 @@ func Test10(t *testing.T) {
 
 func Test2(t *testing.T) {
 	capacity = 2
-	count = 1000
+	count = 10000
 	delta = 10
 	testMap = make(map[int32]*int32, count)
 	testCreate(t)
@@ -91,7 +91,7 @@ func Test2(t *testing.T) {
 }
 
 func Test100(t *testing.T) {
-	capacity = 100
+	capacity = 1000
 	count = 10000
 	delta = 100
 	testMap = make(map[int32]*int32, count)
@@ -234,12 +234,22 @@ var benchList []int32
 
 func BenchmarkInsert(b *testing.B) {
 	b.StopTimer()
-	capacity = 200
-	count = 10000
+	capacity = 100
+	count = 100000
 	b.N = count
 	delta = 1
 	testMap := make(map[int32]int32, count)
 	benchList = make([]int32, count)
+	for i := 0; i < count; {
+		r := rand.Int31()
+		if _, found := testMap[r]; found {
+			continue
+		}
+		i++
+		testMap[r] = r, true
+		benchList = append(benchList, r)
+	}
+	testMap = nil
 	f, err := os.Create(fileName)
 	if err != nil {
 		panic(err)
@@ -249,19 +259,13 @@ func BenchmarkInsert(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	for i := 0; i < b.N; i++ {
-		r := rand.Int31()
-		if _, found := testMap[r]; found {
-			continue
-		}
-		k := key{r, r}
+	for i := 0; i < count; i++ {
+		k := key{benchList[i], benchList[i]}
 		b.StartTimer()
 		if _, err := bt.Insert(k); err != nil {
 			panic(err)
 		}
 		b.StopTimer()
-		testMap[r] = r, true
-		benchList = append(benchList, r)
 	}
 }
 
@@ -283,7 +287,7 @@ func BenchmarkFailedFind(b *testing.B) {
 	b.N = count
 	for i := 0; i < count; i++ {
 		b.StartTimer()
-		_, err := bt.Find(key{benchList[i]+1, 0})
+		_, err := bt.Find(key{benchList[i] + 1, 0})
 		b.StopTimer()
 		if err != nil {
 			panic(err)
