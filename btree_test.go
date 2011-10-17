@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	fileName = "test.btree"
+	testFileName  = "test.btree"
+	benchFileName = "bench.btree"
 )
 
 var (
@@ -35,7 +36,7 @@ var testMap map[int32]*int32
 
 func Test10(t *testing.T) {
 	capacity = 10
-	count = 1000 
+	count = 1000
 	delta = 1
 	testMap = make(map[int32]*int32, count)
 	testCreate(t)
@@ -69,7 +70,7 @@ func Test10(t *testing.T) {
 
 func Test2(t *testing.T) {
 	capacity = 2
-	count = 10000
+	count = 1000
 	delta = 10
 	testMap = make(map[int32]*int32, count)
 	testCreate(t)
@@ -114,7 +115,7 @@ func Test100(t *testing.T) {
 }
 
 func testCreate(t *testing.T) {
-	f, err := os.Create(fileName)
+	f, err := os.Create(testFileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func testCreate(t *testing.T) {
 }
 
 func testOpen(t *testing.T) {
-	f, err := os.OpenFile(fileName, os.O_RDWR, 0666)
+	f, err := os.OpenFile(testFileName, os.O_RDWR, 0666)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,8 +144,10 @@ func testInsert(t *testing.T) {
 		if _, found := testMap[r]; found {
 			continue
 		}
-		if _, err := bt.Insert(key{r, r}); err != nil {
+		if k, err := bt.Insert(key{r, r}); err != nil {
 			t.Fatal(err)
+		} else if k != nil {
+			t.Fatalf("%#v is already inserted", k)
 		}
 		testMap[r] = &r, true
 		i++
@@ -239,7 +242,7 @@ func BenchmarkInsert(b *testing.B) {
 	b.N = count
 	delta = 1
 	testMap := make(map[int32]int32, count)
-	benchList = make([]int32, count)
+	benchList = make([]int32, 0, count)
 	for i := 0; i < count; {
 		r := rand.Int31()
 		if _, found := testMap[r]; found {
@@ -250,7 +253,7 @@ func BenchmarkInsert(b *testing.B) {
 		benchList = append(benchList, r)
 	}
 	testMap = nil
-	f, err := os.Create(fileName)
+	f, err := os.Create(benchFileName)
 	if err != nil {
 		panic(err)
 	}
@@ -262,10 +265,13 @@ func BenchmarkInsert(b *testing.B) {
 	for i := 0; i < count; i++ {
 		k := key{benchList[i], benchList[i]}
 		b.StartTimer()
-		if _, err := bt.Insert(k); err != nil {
-			panic(err)
-		}
+		r, err := bt.Insert(k)
 		b.StopTimer()
+		if err != nil {
+			panic(err)
+		} else if r != nil {
+			panic(r)
+		}
 	}
 }
 
@@ -274,10 +280,12 @@ func BenchmarkFind(b *testing.B) {
 	b.N = count
 	for i := 0; i < count; i++ {
 		b.StartTimer()
-		_, err := bt.Find(key{benchList[i], 0})
+		k, err := bt.Find(key{benchList[i], 0})
 		b.StopTimer()
 		if err != nil {
 			panic(err)
+		} else if k == nil {
+			panic(k)
 		}
 	}
 }
@@ -300,10 +308,12 @@ func BenchmarkUpdate(b *testing.B) {
 	b.N = count
 	for i := 0; i < count; i++ {
 		b.StartTimer()
-		_, err := bt.Update(key{benchList[i], benchList[i] + delta})
+		k, err := bt.Update(key{benchList[i], benchList[i] + delta})
 		b.StopTimer()
 		if err != nil {
 			panic(err)
+		} else if k == nil {
+			panic(k)
 		}
 	}
 }
@@ -313,10 +323,12 @@ func BenchmarkDelete(b *testing.B) {
 	b.N = count
 	for i := 0; i < count; i++ {
 		b.StartTimer()
-		_, err := bt.Delete(key{benchList[i], 0})
+		k, err := bt.Delete(key{benchList[i], 0})
 		b.StopTimer()
 		if err != nil {
 			panic(err)
+		} else if k == nil {
+			panic(k)
 		}
 	}
 }
