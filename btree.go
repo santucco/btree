@@ -74,7 +74,6 @@ type BTree struct {
 
 // NewBTree creates a new B-tree with magic like a file magic, key like a key type and capacity like a number of elements per data.
 // The capacity must be even.
-// Both reader and writer have to be specified.
 // It returns a pointer to the new tree and an error, if any
 func NewBTree(writer io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint) (Tree, os.Error) {
 	if writer == nil {
@@ -105,7 +104,7 @@ func NewBTree(writer io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint)
 
 // OpenBTree opens an existing B-tree. 
 // The file magic and magic must be the same, the type and the size of key and of the key in the tree must be the same too.
-// Only reader is mandatory, writer may be nil if changing of the tree is not planned .
+// If changing of the tree is planning, reader has to be io.ReadWriteSeeker.
 // It returns a pointer to the new tree and an error, if any.
 func OpenBTree(reader io.ReadSeeker, magic [16]byte, key Key) (Tree, os.Error) {
 	if reader == nil {
