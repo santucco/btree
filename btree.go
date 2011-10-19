@@ -20,7 +20,7 @@ var (
 // Errors in addition to IO errors.
 var (
 	NoReader        = os.NewError("reader is not specified")
-	NoWriter        = os.NewError("writer is not specified")
+	NoWriter        = os.NewError("write operations are assumed - io.ReadWriteSeeker has to be specified insead of io.ReadSeeker")
 	OddCapacity     = os.NewError("capacity must be even")
 	MagicMismatch   = os.NewError("magic mismatch")
 	KeyTypeMismatch = os.NewError("key type mismatch")
@@ -76,7 +76,7 @@ type BTree struct {
 // The capacity must be even.
 // Both reader and writer have to be specified.
 // It returns a pointer to the new tree and an error, if any
-func NewBTree(writer io.WriteSeeker, reader io.ReadSeeker, magic [16]byte, key Key, capacity uint) (Tree, os.Error) {
+func NewBTree(writer io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint) (Tree, os.Error) {
 	if writer == nil {
 		return nil, NoWriter
 	}
@@ -85,7 +85,7 @@ func NewBTree(writer io.WriteSeeker, reader io.ReadSeeker, magic [16]byte, key K
 	}
 	this := new(BTree)
 	this.writer = writer
-	this.reader = reader
+	this.reader = writer.(io.ReadSeeker)
 	this.header.Magic = magic
 	k := reflect.ValueOf(key)
 	this.header.KeyType = k.Kind()
@@ -107,13 +107,13 @@ func NewBTree(writer io.WriteSeeker, reader io.ReadSeeker, magic [16]byte, key K
 // The file magic and magic must be the same, the type and the size of key and of the key in the tree must be the same too.
 // Only reader is mandatory, writer may be nil if changing of the tree is not planned .
 // It returns a pointer to the new tree and an error, if any.
-func OpenBTree(reader io.ReadSeeker, writer io.WriteSeeker, magic [16]byte, key Key) (Tree, os.Error) {
+func OpenBTree(reader io.ReadSeeker, magic [16]byte, key Key) (Tree, os.Error) {
 	if reader == nil {
 		return nil, NoReader
 	}
 	this := new(BTree)
 	this.reader = reader
-	this.writer = writer
+	this.writer = reader.(io.WriteSeeker)
 	if en, err := this.header.read(reader); err != nil {
 		return nil, err
 	} else {
