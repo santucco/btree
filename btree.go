@@ -40,7 +40,7 @@ type Tree interface {
 	Insert(key Key) (Key, os.Error)
 	Update(key Key) (Key, os.Error)
 	Delete(key Key) (Key, os.Error)
-	Enum() func() (Key, os.Error)
+	Enum(key Key) func() (Key, os.Error)
 }
 
 // header of file with the tree
@@ -211,8 +211,9 @@ func (this *BTree) Delete(key Key) (Key, os.Error) {
 }
 
 // Enum returns a function-iterator to process enumeration entire the tree.
+// Enumerating starts with key, if it is specified, or with lowest key otherwise.
 // The iterator returns the key or nil if the end of the tree is reached and an error, if any.
-func (this *BTree) Enum() func() (Key, os.Error) {
+func (this *BTree) Enum(key Key) func() (Key, os.Error) {
 	nodes := make([]*node, 0, 10)
 	offset := this.header.Root
 	return func() (Key, os.Error) {
@@ -237,7 +238,22 @@ func (this *BTree) Enum() func() (Key, os.Error) {
 				if err := p.read(this.reader, offset); err != nil {
 					return nil, err
 				}
-				offset = p.getLeast()
+				if key != nil {
+					if idx, _, less := p.find(key); idx != -1 {
+						offset = p.getOffset(idx)
+						p.datas = p.datas[p.size*(idx+1):]
+						p.count -= uint32(idx + 1)
+						key = nil
+					} else if less == -1 {
+						offset = p.getLeast()
+					} else {
+						offset = p.getOffset(less)
+						p.datas = p.datas[p.size*(less+1):]
+						p.count -= uint32(less + 1)
+					}
+				} else {
+					offset = p.getLeast()
+				}
 				nodes = append(nodes, &p)
 			}
 		}
