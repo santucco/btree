@@ -53,19 +53,27 @@ func Test10(t *testing.T) {
 	t.Log("find after update test done")
 	testEnum(t)
 	t.Log("enum test done")
+	testReverseEnum(t)
+	t.Log("reverse enum test done")
 	testDelete(t)
 	t.Log("delete test done")
 	testEnum(t)
 	t.Log("enum test done")
-	return
+	testReverseEnum(t)
+	t.Log("reverse enum test done")
 	testInsert(t)
 	t.Log("second insert test done")
 	testEnum(t)
+	t.Log("second enum test done")
+	testReverseEnum(t)
+	t.Log("second reverse enum test done")
 	t.Log("second enum test done")
 	testDelete(t)
 	t.Log("second delete test done")
 	testEnum(t)
 	t.Log("second enum test done")
+	testReverseEnum(t)
+	t.Log("second reverse enum test done")
 }
 
 func Test2(t *testing.T) {
@@ -87,6 +95,8 @@ func Test2(t *testing.T) {
 	t.Log("find after update test done")
 	testEnum(t)
 	t.Log("enum test done")
+	testReverseEnum(t)
+	t.Log("reverse enum test done")
 	testDelete(t)
 	t.Log("delete test done")
 }
@@ -110,6 +120,8 @@ func Test100(t *testing.T) {
 	t.Log("find after update test done")
 	testEnum(t)
 	t.Log("enum test done")
+	testReverseEnum(t)
+	t.Log("reverse enum test done")
 	testDelete(t)
 	t.Log("delete test done")
 }
@@ -216,11 +228,15 @@ func testEnum(t *testing.T) {
 	count := 0
 	var last int32 = -1
 	f := bt.Enum(nil)
+	var begin int32
 	for k, e := f(); k != nil && e == nil; k, e = f() {
 		if k.(key).K <= last {
 			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
 		}
 		last = k.(key).K
+		if count == len(testMap)/2 {
+			begin = last
+		}
 		if v, found := testMap[last]; !found {
 			t.Fatalf("key not found: %#v\n", last)
 		} else if k.(key).V != *v {
@@ -232,10 +248,22 @@ func testEnum(t *testing.T) {
 		t.Fatalf("count of values mismatch: %#v, must be %#v\n", count, len(testMap))
 	}
 	count = 0
-	var begin int32 = 0
-	var end int32 = 1500000000
-	f = bt.Enum(&key{begin, 0})
 	last = -1
+	f = bt.Enum(nil)
+	for k, e := f(); k != nil && e == nil && k.(key).K < begin; k, e = f() {
+		if k.(key).K <= last {
+			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
+		}
+		last = k.(key).K
+		if v, found := testMap[last]; !found {
+			t.Fatalf("key not found: %#v\n", last)
+		} else if k.(key).V != *v {
+			t.Fatalf("value mismatch for key %#v, must be %#v\n", k, *v)
+		}
+		count++
+	}
+	var end int32 = begin + 1000000
+	f = bt.Enum(key{begin, 0})
 	for k, e := f(); k != nil && e == nil && k.(key).K < end; k, e = f() {
 		if k.(key).K <= last {
 			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
@@ -248,7 +276,7 @@ func testEnum(t *testing.T) {
 		}
 		count++
 	}
-	f = bt.Enum(&key{end, 0})
+	f = bt.Enum(key{end, 0})
 	for k, e := f(); k != nil && e == nil; k, e = f() {
 		if k.(key).K <= last {
 			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
@@ -264,7 +292,76 @@ func testEnum(t *testing.T) {
 	if count != len(testMap) {
 		t.Fatalf("count of values mismatch: %#v, must be %#v\n", count, len(testMap))
 	}
+}
 
+func testReverseEnum(t *testing.T) {
+	count := 0
+	var last int32 = 0xFFFFFFFF / 2
+	var begin int32
+	f := bt.ReverseEnum(nil)
+	for k, e := f(); k != nil && e == nil; k, e = f() {
+		if k.(key).K > last {
+			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
+		}
+		last = k.(key).K
+		if count == len(testMap)/2 {
+			begin = last
+		}
+		if v, found := testMap[last]; !found {
+			t.Fatalf("key not found: %#v\n", last)
+		} else if k.(key).V != *v {
+			t.Fatalf("value mismatch for key %#v, must be %#v\n", k, *v)
+		}
+		count++
+	}
+	if count != len(testMap) {
+		t.Fatalf("count of values mismatch: %#v, must be %#v\n", count, len(testMap))
+	}
+	count = 0
+	last = 0xFFFFFFFF / 2
+	f = bt.ReverseEnum(nil)
+	for k, e := f(); k != nil && e == nil && k.(key).K > begin; k, e = f() {
+		if k.(key).K > last {
+			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
+		}
+		last = k.(key).K
+		if v, found := testMap[last]; !found {
+			t.Fatalf("key not found: %#v\n", last)
+		} else if k.(key).V != *v {
+			t.Fatalf("value mismatch for key %#v, must be %#v\n", k, *v)
+		}
+		count++
+	}
+	var end int32 = begin - 100000000
+	f = bt.ReverseEnum(key{begin, 0})
+	for k, e := f(); k != nil && e == nil && k.(key).K > end; k, e = f() {
+		if k.(key).K > last {
+			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
+		}
+		last = k.(key).K
+		if v, found := testMap[last]; !found {
+			t.Fatalf("key not found: %#v\n", last)
+		} else if k.(key).V != *v {
+			t.Fatalf("value mismatch for key %#v, must be %#v\n", k, *v)
+		}
+		count++
+	}
+	f = bt.ReverseEnum(key{end, 0})
+	for k, e := f(); k != nil && e == nil; k, e = f() {
+		if k.(key).K > last {
+			t.Fatalf("wrong sequence of keys: current key: %#v, previous key: %#v\n", k, last)
+		}
+		last = k.(key).K
+		if v, found := testMap[last]; !found {
+			t.Fatalf("key not found: %#v\n", last)
+		} else if k.(key).V != *v {
+			t.Fatalf("value mismatch for key %#v, must be %#v\n", k, *v)
+		}
+		count++
+	}
+	if count != len(testMap) {
+		t.Fatalf("count of values mismatch: %#v, must be %#v\n", count, len(testMap))
+	}
 }
 
 var benchList []int32
