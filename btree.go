@@ -239,9 +239,9 @@ func (this *BTree) Enum(key Key) func() (Key, os.Error) {
 				}
 				if key != nil {
 					if idx, _, less := p.find(key); idx != -1 {
-						offset = p.getOffset(idx)
-						p.datas = p.datas[p.size*(idx+1):]
-						p.count -= uint32(idx + 1)
+						offset = -1
+						p.datas = p.datas[p.size*idx:]
+						p.count -= uint32(idx)
 						key = nil
 					} else if less == -1 {
 						offset = p.getLeast()
