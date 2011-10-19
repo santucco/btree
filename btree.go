@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// Package btree implements B-trees with fixed size keys, http://en.wikipedia.org/wiki/Btree.
+// Package btree implements B-trees with fixed size keys are saved in a specified storage, http://en.wikipedia.org/wiki/Btree.
 package btree
 
 import (
@@ -41,6 +41,7 @@ type Tree interface {
 	Update(key Key) (Key, os.Error)
 	Delete(key Key) (Key, os.Error)
 	Enum(key Key) func() (Key, os.Error)
+	ReverseEnum(key Key) func() (Key, os.Error)
 }
 
 // header of file with the tree
@@ -252,6 +253,65 @@ func (this *BTree) Enum(key Key) func() (Key, os.Error) {
 					}
 				} else {
 					offset = p.getLeast()
+				}
+				nodes = append(nodes, &p)
+			}
+		}
+		return nil, nil
+	}
+}
+
+// ReverseEnum returns a function-iterator to process enumeration entire the tree from bigger to lower keys.
+// Enumerating starts with key, if it is specified, or with biggest key otherwise.
+// The iterator returns the key or nil if the end of the tree is reached and an error, if any.
+func (this *BTree) ReverseEnum(key Key) func() (Key, os.Error) {
+	nodes := make([]*node, 0, 10)
+	offset := this.header.Root
+	return func() (Key, os.Error) {
+		for true {
+			if offset == -1 {
+				if len(nodes) == 0 {
+					return nil, nil
+				}
+				l := len(nodes) - 1
+				p := nodes[l]
+				if p.count > 0 {
+					key := p.getKey(int(p.count - 1))
+					p.count--
+					p.datas = p.datas[:int(p.count)*p.size]
+					if p.count > 0 {
+						offset = p.getOffset(int(p.count - 1))
+					} else {
+						offset = p.getLeast()
+					}
+					return key, nil
+				}
+				nodes = nodes[:l]
+			} else {
+				var p node
+				p.init(this)
+				if err := p.read(this.reader, offset); err != nil {
+					return nil, err
+				}
+				if key != nil {
+					if idx, _, less := p.find(key); idx != -1 {
+						offset = -1
+						p.setOffset(idx, -1)
+						idx++
+						p.datas = p.datas[:p.size*idx]
+						p.count = uint32(idx)
+						key = nil
+					} else if less != -1 {
+						offset = p.getOffset(less)
+						less++
+						p.datas = p.datas[:p.size*less]
+						p.count = uint32(less)
+					} else {
+						offset = p.getLeast()
+						p.count = 0
+					}
+				} else {
+					offset = p.getOffset(int(p.count - 1))
 				}
 				nodes = append(nodes, &p)
 			}
