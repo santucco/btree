@@ -120,7 +120,7 @@ func testCreate(t *testing.T) {
 		t.Fatal(err)
 	}
 	var k key
-	_, err = NewBTree(f, f, magic, k, capacity)
+	_, err = NewBTree(f, magic, k, capacity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func testOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 	var k key
-	bt, err = OpenBTree(f, f, magic, k)
+	bt, err = OpenBTree(f, magic, k)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -292,7 +292,7 @@ func BenchmarkInsert(b *testing.B) {
 		panic(err)
 	}
 	var k key
-	bt, err = NewBTree(f, f, magic, k, capacity)
+	bt, err = NewBTree(f, magic, k, capacity)
 	if err != nil {
 		panic(err)
 	}
