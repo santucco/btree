@@ -357,6 +357,7 @@ func (this *BTree) writeNode(p *node) os.Error {
 	} else {
 		if len(this.empty) != 0 {
 			p.offset = this.empty[len(this.empty)-1]
+			this.empty[len(this.empty)-1] = 0
 			this.empty = this.empty[:len(this.empty)-1]
 			if err := this.header.write(writer, this.empty); err != nil {
 				return err
@@ -704,13 +705,16 @@ func (this *fileHeader) read(reader io.ReadSeeker) ([]int64, os.Error) {
 	if err := binary.Read(reader, bo, &count); err != nil {
 		return nil, err
 	}
+	e := make([]byte, count*8)
+	if _, err := io.ReadFull(reader, e); err != nil {
+		return nil, err
+	}
+	b := bytes.NewBuffer(e)
 	empty := make([]int64, count)
 	for i := 0; i < int(count); i++ {
-		var off int32
-		if err := binary.Read(reader, bo, &off); err != nil {
+		if err := binary.Read(b, bo, &empty[i]); err != nil {
 			return nil, err
 		}
-		empty[i] = int64(off)
 	}
 	return empty, nil
 }
@@ -734,15 +738,15 @@ func (this *fileHeader) write(writer io.WriteSeeker, empty []int64) os.Error {
 		if err := binary.Write(writer, bo, count); err != nil {
 			return err
 		}
-		for i := 0; i < int(count); i++ {
-			if err := binary.Write(writer, bo, int32(empty[i])); err != nil {
+		e := empty[:cap(empty)]
+		b := bytes.NewBuffer(nil)
+		for i := 0; i < len(e); i++ {
+			if err := binary.Write(b, bo, e[i]); err != nil {
 				return err
 			}
 		}
-		for i := int(count); i < cap(empty); i++ {
-			if err := binary.Write(writer, bo, int32(0)); err != nil {
-				return err
-			}
+		if _, err := b.WriteTo(writer); err != nil {
+			return err
 		}
 	}
 
