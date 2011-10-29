@@ -358,10 +358,23 @@ func (this *BTree) writeNode(p *node) os.Error {
 		if len(this.empty) != 0 {
 			p.offset = this.empty[len(this.empty)-1]
 			this.empty = this.empty[:len(this.empty)-1]
-			if len(this.empty) == 0 {
-				if err := this.header.write(writer, nil); err != nil {
-					return err
-				}
+			if err := this.header.write(writer, this.empty); err != nil {
+				return err
+			}
+			if _, err := writer.Seek(p.offset, os.SEEK_SET); err != nil {
+				return err
+			}
+		} else if this.header.EmptyNodes != -1 {
+			p.offset = this.header.EmptyNodes
+			if off, err := writer.Seek(0, os.SEEK_END); err != nil {
+				return err
+			} else if off - this.header.EmptyNodes	> int64(cap(p.raw)) {
+				this.header.EmptyNodes = off
+			} else {
+				this.header.EmptyNodes = -1
+			}
+			if err := this.header.write(writer, this.empty); err != nil {
+				return err
 			}
 			if _, err := writer.Seek(p.offset, os.SEEK_SET); err != nil {
 				return err
@@ -622,9 +635,8 @@ func (this *BTree) delete(key Key) ([]byte, os.Error) {
 			this.empty = append(this.empty, p.offset)
 			if p.offset == this.header.Root {
 				this.header.Root = -1
-				return buf, this.header.write(this.storage.(io.WriteSeeker), this.empty)
 			}
-			return buf, nil
+			return buf, this.header.write(this.storage.(io.WriteSeeker), this.empty)
 		}
 		if poff != nil {
 			copy(poff, []byte{0xff, 0xff, 0xff, 0xff})
@@ -727,8 +739,11 @@ func (this *fileHeader) write(writer io.WriteSeeker, empty []int64) os.Error {
 				return err
 			}
 		}
-	} else {
-		this.EmptyNodes = -1
+		for i := int(count); i < cap(empty); i++ {
+			if err := binary.Write(writer, bo, int32(0)); err != nil {
+				return err
+			}
+		}
 	}
 
 	if _, err := writer.Seek(0, os.SEEK_SET); err != nil {
