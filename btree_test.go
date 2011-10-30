@@ -79,6 +79,7 @@ func Test10(t *testing.T) {
 	t.Log("enum test done")
 	testReverseEnum(t)
 	t.Log("reverse enum test done")
+	count *= 2
 	testInsert(t)
 	t.Log("second insert test done")
 	testEnum(t)

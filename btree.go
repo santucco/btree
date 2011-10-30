@@ -357,11 +357,25 @@ func (this *BTree) writeNode(p *node) os.Error {
 	} else {
 		if len(this.empty) != 0 {
 			p.offset = this.empty[len(this.empty)-1]
+			this.empty[len(this.empty)-1] = 0
 			this.empty = this.empty[:len(this.empty)-1]
-			if len(this.empty) == 0 {
-				if err := this.header.write(writer, nil); err != nil {
-					return err
-				}
+			if err := this.header.write(writer, this.empty); err != nil {
+				return err
+			}
+			if _, err := writer.Seek(p.offset, os.SEEK_SET); err != nil {
+				return err
+			}
+		} else if this.header.EmptyNodes != -1 {
+			p.offset = this.header.EmptyNodes
+			if off, err := writer.Seek(0, os.SEEK_END); err != nil {
+				return err
+			} else if off - this.header.EmptyNodes	> int64(cap(p.raw)) {
+				this.header.EmptyNodes = off
+			} else {
+				this.header.EmptyNodes = -1
+			}
+			if err := this.header.write(writer, this.empty); err != nil {
+				return err
 			}
 			if _, err := writer.Seek(p.offset, os.SEEK_SET); err != nil {
 				return err
@@ -622,9 +636,8 @@ func (this *BTree) delete(key Key) ([]byte, os.Error) {
 			this.empty = append(this.empty, p.offset)
 			if p.offset == this.header.Root {
 				this.header.Root = -1
-				return buf, this.header.write(this.storage.(io.WriteSeeker), this.empty)
 			}
-			return buf, nil
+			return buf, this.header.write(this.storage.(io.WriteSeeker), this.empty)
 		}
 		if poff != nil {
 			copy(poff, []byte{0xff, 0xff, 0xff, 0xff})
@@ -692,13 +705,16 @@ func (this *fileHeader) read(reader io.ReadSeeker) ([]int64, os.Error) {
 	if err := binary.Read(reader, bo, &count); err != nil {
 		return nil, err
 	}
+	e := make([]byte, count*8)
+	if _, err := io.ReadFull(reader, e); err != nil {
+		return nil, err
+	}
+	b := bytes.NewBuffer(e)
 	empty := make([]int64, count)
 	for i := 0; i < int(count); i++ {
-		var off int32
-		if err := binary.Read(reader, bo, &off); err != nil {
+		if err := binary.Read(b, bo, &empty[i]); err != nil {
 			return nil, err
 		}
-		empty[i] = int64(off)
 	}
 	return empty, nil
 }
@@ -722,13 +738,16 @@ func (this *fileHeader) write(writer io.WriteSeeker, empty []int64) os.Error {
 		if err := binary.Write(writer, bo, count); err != nil {
 			return err
 		}
-		for i := 0; i < int(count); i++ {
-			if err := binary.Write(writer, bo, int32(empty[i])); err != nil {
+		e := empty[:cap(empty)]
+		b := bytes.NewBuffer(nil)
+		for i := 0; i < len(e); i++ {
+			if err := binary.Write(b, bo, e[i]); err != nil {
 				return err
 			}
 		}
-	} else {
-		this.EmptyNodes = -1
+		if _, err := b.WriteTo(writer); err != nil {
+			return err
+		}
 	}
 
 	if _, err := writer.Seek(0, os.SEEK_SET); err != nil {
