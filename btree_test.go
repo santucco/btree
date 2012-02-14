@@ -4,10 +4,10 @@
 package btree
 
 import (
-	"testing"
-	"os"
-	"rand"
 	"encoding/binary"
+	"math/rand"
+	"os"
+	"testing"
 )
 
 const (
@@ -26,7 +26,7 @@ type key struct {
 	V uint
 }
 
-func (this *key) Compare(buf []byte) (int, os.Error) {
+func (this *key) Compare(buf []byte) (int, error) {
 	k := uint(binary.LittleEndian.Uint32(buf[:4]))
 	r := this.K - k
 	return int(r), nil
@@ -36,13 +36,13 @@ func (this key) Size() uint {
 	return 8
 }
 
-func (this *key) Read(buf []byte) os.Error {
+func (this *key) Read(buf []byte) error {
 	this.K = uint(binary.LittleEndian.Uint32(buf[:4]))
 	this.V = uint(binary.LittleEndian.Uint32(buf[4:]))
 	return nil
 }
 
-func (this *key) Write(buf []byte) os.Error {
+func (this *key) Write(buf []byte) error {
 	binary.LittleEndian.PutUint32(buf[:4], uint32(this.K))
 	binary.LittleEndian.PutUint32(buf[4:], uint32(this.V))
 	return nil
@@ -179,7 +179,7 @@ func testInsert(t *testing.T) {
 		} else if k != nil {
 			t.Fatalf("%#v is already inserted", k)
 		}
-		testMap[r] = &r, true
+		testMap[r] = &r
 		i++
 	}
 	for k, v := range testMap {
@@ -238,7 +238,7 @@ func testDelete(t *testing.T) {
 			t.Fatalf("result of delete is mismatch: %#v, must be %#v\n", r, *v)
 		}
 		count++
-		testMap[k] = nil, false
+		delete(testMap, k)
 	}
 }
 
@@ -398,7 +398,7 @@ func BenchmarkInsert(b *testing.B) {
 			continue
 		}
 		i++
-		testMap[r] = r, true
+		testMap[r] = r
 		benchList = append(benchList, r)
 	}
 	testMap = nil

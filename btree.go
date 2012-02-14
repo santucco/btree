@@ -6,10 +6,11 @@
 package btree
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"io"
 	"os"
-	"encoding/binary"
-	"bytes"
 )
 
 var (
@@ -18,11 +19,11 @@ var (
 
 // Errors in addition to IO errors.
 var (
-	NoReader        = os.NewError("reader is not specified")
-	NoWriter        = os.NewError("write operations are assumed - io.ReadWriteSeeker has to be specified insead of io.ReadSeeker")
-	OddCapacity     = os.NewError("capacity must be even")
-	MagicMismatch   = os.NewError("magic mismatch")
-	KeySizeMismatch = os.NewError("key size mismatch")
+	NoReader        = errors.New("reader is not specified")
+	NoWriter        = errors.New("write operations are assumed - io.ReadWriteSeeker has to be specified insead of io.ReadSeeker")
+	OddCapacity     = errors.New("capacity must be even")
+	MagicMismatch   = errors.New("magic mismatch")
+	KeySizeMismatch = errors.New("key size mismatch")
 )
 
 // An interface a key must support to be stored in the tree.
@@ -33,20 +34,20 @@ var (
 // Read reads a key from b
 // Write writes a key to b
 type Key interface {
-	Compare(b []byte) (int, os.Error)
+	Compare(b []byte) (int, error)
 	Size() uint
-	Read(b []byte) os.Error
-	Write(b []byte) os.Error
+	Read(b []byte) error
+	Write(b []byte) error
 }
 
 // A basic interface for tree operations.
 type Tree interface {
-	Find(key Key) (Key, os.Error)
-	Insert(key Key) (Key, os.Error)
-	Update(key Key) (Key, os.Error)
-	Delete(key Key) (Key, os.Error)
-	Enum(key Key) func() (Key, os.Error)
-	ReverseEnum(key Key) func() (Key, os.Error)
+	Find(key Key) (Key, error)
+	Insert(key Key) (Key, error)
+	Update(key Key) (Key, error)
+	Delete(key Key) (Key, error)
+	Enum(key Key) func() (Key, error)
+	ReverseEnum(key Key) func() (Key, error)
 }
 
 // header of file with the tree
@@ -78,7 +79,7 @@ type BTree struct {
 // NewBTree creates a new B-tree with magic like a file magic, key like a key type and capacity like a number of elements per data.
 // The capacity must be even.
 // It returns a pointer to the new tree and an error, if any
-func NewBTree(storage io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint) (Tree, os.Error) {
+func NewBTree(storage io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint) (Tree, error) {
 	if storage == nil {
 		return nil, NoWriter
 	}
@@ -106,7 +107,7 @@ func NewBTree(storage io.ReadWriteSeeker, magic [16]byte, key Key, capacity uint
 // The file magic and magic must be the same, the type and the size of key and of the key in the tree must be the same too.
 // If changing of the tree is planning, storage has to be io.ReadWriteSeeker.
 // It returns a pointer to the new tree and an error, if any.
-func OpenBTree(storage io.ReadSeeker, magic [16]byte, key Key) (Tree, os.Error) {
+func OpenBTree(storage io.ReadSeeker, magic [16]byte, key Key) (Tree, error) {
 	if storage == nil {
 		return nil, NoReader
 	}
@@ -129,7 +130,7 @@ func OpenBTree(storage io.ReadSeeker, magic [16]byte, key Key) (Tree, os.Error) 
 
 // Find searches a key in the tree.
 // It returns the key if it is found or nil if the key is not found and an error, if any.
-func (this *BTree) Find(key Key) (Key, os.Error) {
+func (this *BTree) Find(key Key) (Key, error) {
 	if uint(this.header.KeySize) != key.Size() {
 		return nil, KeySizeMismatch
 	}
@@ -148,7 +149,7 @@ func (this *BTree) Find(key Key) (Key, os.Error) {
 
 // Find searches a key in the tree.
 // It returns the key if it is already exists or nil if the key is inserted and an error, if any.
-func (this *BTree) Insert(key Key) (Key, os.Error) {
+func (this *BTree) Insert(key Key) (Key, error) {
 	if uint(this.header.KeySize) != key.Size() {
 		return nil, KeySizeMismatch
 	}
@@ -168,7 +169,7 @@ func (this *BTree) Insert(key Key) (Key, os.Error) {
 // Update updates a key in the tree. 
 // This is useful if the key is complex type with additional information.
 // It returns an old value of the key if the key is updated or nil if the key is not found and an error, if any.
-func (this *BTree) Update(key Key) (Key, os.Error) {
+func (this *BTree) Update(key Key) (Key, error) {
 	if this.storage.(io.WriteSeeker) == nil {
 		return nil, NoWriter
 	}
@@ -193,7 +194,7 @@ func (this *BTree) Update(key Key) (Key, os.Error) {
 
 // Delete deletes a key from the tree. 
 // It returns the key if it is deleted or nil if the key is not found and an error, if any.
-func (this *BTree) Delete(key Key) (Key, os.Error) {
+func (this *BTree) Delete(key Key) (Key, error) {
 	if this.storage.(io.WriteSeeker) == nil {
 		return nil, NoWriter
 	}
@@ -216,10 +217,10 @@ func (this *BTree) Delete(key Key) (Key, os.Error) {
 // Enum returns a function-iterator to process enumeration entire the tree from lower to bigger keys.
 // Enumerating starts with key, if it is specified, or with lowest key otherwise.
 // The iterator returns the key or nil if the end of the tree is reached and an error, if any.
-func (this *BTree) Enum(key Key) func() (Key, os.Error) {
+func (this *BTree) Enum(key Key) func() (Key, error) {
 	nodes := make([]*node, 0, 10)
 	offset := this.header.Root
-	return func() (Key, os.Error) {
+	return func() (Key, error) {
 		for true {
 			if offset == -1 {
 				if len(nodes) == 0 {
@@ -271,10 +272,10 @@ func (this *BTree) Enum(key Key) func() (Key, os.Error) {
 // ReverseEnum returns a function-iterator to process enumeration entire the tree from bigger to lower keys.
 // Enumerating starts with key, if it is specified, or with biggest key otherwise.
 // The iterator returns the key or nil if the end of the tree is reached and an error, if any.
-func (this *BTree) ReverseEnum(key Key) func() (Key, os.Error) {
+func (this *BTree) ReverseEnum(key Key) func() (Key, error) {
 	nodes := make([]*node, 0, 10)
 	offset := this.header.Root
-	return func() (Key, os.Error) {
+	return func() (Key, error) {
 		for true {
 			if offset == -1 {
 				if len(nodes) == 0 {
@@ -348,7 +349,7 @@ func (this BTree) Magic() [16]byte {
 
 // writeNode writes node to a buffer and writes the buffer to the storage.
 // It returns nil on success or an error.
-func (this *BTree) writeNode(p *node) os.Error {
+func (this *BTree) writeNode(p *node) error {
 	writer := this.storage.(io.WriteSeeker)
 	if p.offset != -1 {
 		if _, err := writer.Seek(p.offset, os.SEEK_SET); err != nil {
@@ -369,7 +370,7 @@ func (this *BTree) writeNode(p *node) os.Error {
 			p.offset = this.header.EmptyNodes
 			if off, err := writer.Seek(0, os.SEEK_END); err != nil {
 				return err
-			} else if off - this.header.EmptyNodes	> int64(cap(p.raw)) {
+			} else if off-this.header.EmptyNodes > int64(cap(p.raw)) {
 				this.header.EmptyNodes = off
 			} else {
 				this.header.EmptyNodes = -1
@@ -392,7 +393,7 @@ func (this *BTree) writeNode(p *node) os.Error {
 
 // find finds a key.
 // It returns pointer to a node with the key and an index of the key in the node and an error, if any.
-func (this *BTree) find(key Key) (*node, int, []byte, os.Error) {
+func (this *BTree) find(key Key) (*node, int, []byte, error) {
 	curoff := this.header.Root
 	for curoff > 0 {
 		var p node
@@ -415,7 +416,7 @@ func (this *BTree) find(key Key) (*node, int, []byte, os.Error) {
 
 // insert inserts a key in the tree.
 // It returns the key if it is already exists or nil if the key is inserted and an error, if any.
-func (this *BTree) insert(key Key) ([]byte, os.Error) {
+func (this *BTree) insert(key Key) ([]byte, error) {
 	offset := this.header.Root
 	offsets := make([]int64, 0, 10)
 	c := 0
@@ -424,7 +425,7 @@ func (this *BTree) insert(key Key) ([]byte, os.Error) {
 	var less int = -1
 	for true {
 		var b []byte
-		var err os.Error
+		var err error
 		if offset != -1 {
 			if err := p.read(this.storage, offset); err != nil {
 				return nil, err
@@ -489,7 +490,7 @@ func (this *BTree) insert(key Key) ([]byte, os.Error) {
 
 // split splits a node pointed by p on two nodes, inserts a middle data in a parent node and saves all changed nodes.
 // It returns nil on success or an error.
-func (this *BTree) split(p *node, offsets []int64) os.Error {
+func (this *BTree) split(p *node, offsets []int64) error {
 	var root int64 = -1
 	for true {
 		var np node
@@ -548,7 +549,7 @@ func (this *BTree) split(p *node, offsets []int64) os.Error {
 
 // delete deletes a key from the tree.
 // It returns nil on success or an error.
-func (this *BTree) delete(key Key) ([]byte, os.Error) {
+func (this *BTree) delete(key Key) ([]byte, error) {
 	offset := this.header.Root
 	index := -1
 	var pnode *node
@@ -563,7 +564,7 @@ func (this *BTree) delete(key Key) ([]byte, os.Error) {
 		less := -1
 		var b []byte
 		if offset != -1 {
-			var err os.Error
+			var err error
 			if err = tmp.read(this.storage, offset); err != nil {
 				return nil, err
 			}
@@ -688,7 +689,7 @@ func (this fileHeader) bufferSize() uint32 {
 
 // read reads the file header from reader.
 // It retuns a slice of offsets of empty nodes and nil or nil and an error.
-func (this *fileHeader) read(reader io.ReadSeeker) ([]int64, os.Error) {
+func (this *fileHeader) read(reader io.ReadSeeker) ([]int64, error) {
 	if _, err := reader.Seek(0, os.SEEK_SET); err != nil {
 		return nil, err
 	}
@@ -721,7 +722,7 @@ func (this *fileHeader) read(reader io.ReadSeeker) ([]int64, os.Error) {
 
 // read writes the file header to writer
 // It retuns nil on success or an error
-func (this *fileHeader) write(writer io.WriteSeeker, empty []int64) os.Error {
+func (this *fileHeader) write(writer io.WriteSeeker, empty []int64) error {
 	if len(empty) != 0 {
 		if this.EmptyNodes == -1 {
 			if off, err := writer.Seek(0, os.SEEK_END); err != nil {
@@ -768,7 +769,7 @@ func (this *node) init(tree *BTree) {
 
 // find finds a key in the node.
 // It returns an index of the key in the node and -1 or -1 and an index of a nearest key is less of the key.
-func (this node) find(key Key) (int, []byte, int, os.Error) {
+func (this node) find(key Key) (int, []byte, int, error) {
 	min := 1
 	max := int(this.count)
 	for max >= min {
@@ -808,7 +809,7 @@ func (this *node) getKey(i int) []byte {
 }
 
 // setKey writes a key to the datas by index i
-func (this *node) setKey(i int, k Key) os.Error {
+func (this *node) setKey(i int, k Key) error {
 	return k.Write(this.datas[i*this.size+4 : (i+1)*this.size])
 
 }
@@ -827,7 +828,7 @@ func (this *node) setLeast(l int64) {
 
 // insert inserts a key in the node after index position with offset.
 // It returns a pointer to the filled offset.
-func (this *node) insert(index int, key Key, offset int64) ([]byte, os.Error) {
+func (this *node) insert(index int, key Key, offset int64) ([]byte, error) {
 	this.count++
 	this.datas = this.raw[8 : 8+int(this.count)*this.size]
 	if index+2 < int(this.count) {
@@ -842,7 +843,7 @@ func (this *node) insert(index int, key Key, offset int64) ([]byte, os.Error) {
 
 // read reads the node from reader with keys of type t and sets a node offset to offset.
 // It retuns nil on success or an error.
-func (this *node) read(reader io.ReadSeeker, offset int64) os.Error {
+func (this *node) read(reader io.ReadSeeker, offset int64) error {
 	if _, err := reader.Seek(offset, os.SEEK_SET); err != nil {
 		return err
 	}
@@ -857,7 +858,7 @@ func (this *node) read(reader io.ReadSeeker, offset int64) os.Error {
 
 // write writes the node to writer with keys of type t.
 // It retuns nil on success or an error.
-func (this *node) write(writer io.Writer) os.Error {
+func (this *node) write(writer io.Writer) error {
 	bo.PutUint32(this.raw[4:8], uint32(this.count))
 	_, err := writer.Write(this.raw)
 	return err
